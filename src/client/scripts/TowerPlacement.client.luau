@@ -37,111 +37,251 @@ local RunService = game:GetService("RunService")
 -- References
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
-local camera = workspace.CurrentCamera
+
+-- Wait for RemoteEvents
+local PlaceTowerEvent = ReplicatedStorage:WaitForChild("PlaceTower")
+local PlaceTowerResultEvent = ReplicatedStorage:WaitForChild("PlaceTowerResult")
+
+-- Wait for shared state (used by UI to communicate selected tower)
+local SelectedTowerValue = ReplicatedStorage:WaitForChild("SelectedTower")
 
 -- Config
 local TowerConfig = require(ReplicatedStorage.config.TowerConfig)
-
--- Remote Events
--- TODO: Get RemoteEvent "PlaceTower" from ReplicatedStorage
 
 -- State
 local selectedTowerType = nil
 local ghostModel = nil
 local isPlacing = false
 local canPlace = false
-local playerMoney = 0 -- Updated by server RemoteEvent
+local renderConnection = nil
+
+-- Constants
+local VALID_COLOR = Color3.fromRGB(0, 255, 0) -- Green
+local INVALID_COLOR = Color3.fromRGB(255, 0, 0) -- Red
+local MIN_TOWER_SPACING = 8 -- Minimum distance between towers
+local GHOST_TRANSPARENCY = 0.5
 
 --[[
-    Start tower placement mode
+    Create a ghost model for the selected tower type
     @param towerType: string
+    @return Model?
 ]]
-local function startPlacement(towerType: string)
-    -- TODO: Check if player can afford tower
-    -- TODO: Set selectedTowerType
-    -- TODO: Set isPlacing = true
-    -- TODO: Create ghost model (transparent copy of tower)
-    -- TODO: Connect to RunService.RenderStepped to update ghost position
+local function createGhostModel(towerType: string)
+    local config = TowerConfig[towerType]
+    if not config then
+        warn("Invalid tower type:", towerType)
+        return nil
+    end
+    
+    -- Create a simple ghost part (cylinder representing tower)
+    local ghost = Instance.new("Model")
+    ghost.Name = "GhostTower"
+    
+    local part = Instance.new("Part")
+    part.Name = "Base"
+    part.Size = Vector3.new(4, 6, 4)
+    part.Anchored = true
+    part.CanCollide = false
+    part.Transparency = GHOST_TRANSPARENCY
+    part.Material = Enum.Material.Neon
+    
+    -- Color based on tower type
+    if towerType == "Sparky" then
+        part.Color = Color3.fromRGB(255, 255, 0) -- Yellow
+    elseif towerType == "Rocky" then
+        part.Color = Color3.fromRGB(139, 90, 43) -- Brown
+    elseif towerType == "Zippy" then
+        part.Color = Color3.fromRGB(0, 255, 127) -- Green
+    else
+        part.Color = Color3.fromRGB(200, 200, 200) -- Default gray
+    end
+    
+    part.Parent = ghost
+    ghost.PrimaryPart = part
+    
+    return ghost
 end
 
 --[[
-    Cancel tower placement
+    Check if a position is valid for tower placement
+    @param position: Vector3
+    @return boolean
 ]]
-local function cancelPlacement()
-    -- TODO: Set isPlacing = false
-    -- TODO: Destroy ghost model
-    -- TODO: Set selectedTowerType = nil
-    -- TODO: Disconnect RenderStepped connection
+local function isValidPlacement(position: Vector3): boolean
+    -- Check if too close to other towers
+    local towers = workspace:FindFirstChild("Towers")
+    if towers then
+        for _, tower in ipairs(towers:GetChildren()) do
+            if tower:IsA("Model") and tower.PrimaryPart then
+                local distance = (tower.PrimaryPart.Position - position).Magnitude
+                if distance < MIN_TOWER_SPACING then
+                    return false
+                end
+            end
+        end
+    end
+    
+    -- Check if on ground (y coordinate should be close to 0.5, which is half the part height)
+    if position.Y < -5 or position.Y > 10 then
+        return false
+    end
+    
+    return true
 end
 
 --[[
     Update ghost model position (called every frame while placing)
 ]]
 local function updateGhostPosition()
-    -- TODO: Raycast from mouse to ground
-    -- TODO: If hit, move ghost to hit position
-    -- TODO: Check if position is valid (not overlapping, on ground)
-    -- TODO: Set ghost color: green if valid, red if invalid
-    -- TODO: Update canPlace boolean
+    if not isPlacing or not ghostModel then
+        return
+    end
+    
+    -- Raycast from mouse to ground
+    local ray = mouse.Hit
+    local position = ray.Position
+    
+    -- Move ghost to mouse position
+    if ghostModel.PrimaryPart then
+        ghostModel:SetPrimaryPartCFrame(CFrame.new(position.X, position.Y + 3, position.Z))
+        
+        -- Check if placement is valid
+        canPlace = isValidPlacement(position)
+        
+        -- Update ghost color based on validity
+        local color = canPlace and VALID_COLOR or INVALID_COLOR
+        ghostModel.PrimaryPart.Color = color
+    end
+end
+
+--[[
+    Start tower placement mode
+    @param towerType: string
+]]
+local function startPlacement(towerType: string)
+    -- Cancel any existing placement
+    if isPlacing then
+        cancelPlacement()
+    end
+    
+    selectedTowerType = towerType
+    isPlacing = true
+    
+    -- Create ghost model
+    ghostModel = createGhostModel(towerType)
+    if not ghostModel then
+        isPlacing = false
+        return
+    end
+    
+    ghostModel.Parent = workspace
+    
+    -- Connect to RenderStepped for smooth ghost updates
+    renderConnection = RunService.RenderStepped:Connect(updateGhostPosition)
+end
+
+--[[
+    Cancel tower placement
+]]
+local function cancelPlacement()
+    isPlacing = false
+    canPlace = false
+    selectedTowerType = nil
+    
+    -- Destroy ghost model
+    if ghostModel then
+        ghostModel:Destroy()
+        ghostModel = nil
+    end
+    
+    -- Disconnect render connection
+    if renderConnection then
+        renderConnection:Disconnect()
+        renderConnection = nil
+    end
+    
+    -- Clear selected tower in ReplicatedStorage
+    SelectedTowerValue.Value = ""
 end
 
 --[[
     Attempt to place tower at current ghost position
 ]]
 local function placeTower()
-    -- TODO: If not canPlace, return
-    -- TODO: Get ghost position
-    -- TODO: Fire RemoteEvent "PlaceTower" with {player, selectedTowerType, position}
-    -- TODO: cancelPlacement()
+    if not canPlace or not isPlacing or not selectedTowerType or not ghostModel then
+        return
+    end
+    
+    -- Get ghost position
+    local position = ghostModel.PrimaryPart.Position
+    
+    -- Fire RemoteEvent to server
+    PlaceTowerEvent:FireServer(selectedTowerType, position)
+    
+    -- Cancel placement (server will handle success/failure)
+    cancelPlacement()
 end
 
 --[[
-    Handle mouse click
-]]
-local function onMouseClick()
-    -- TODO: If isPlacing and canPlace:
-    --         placeTower()
-end
-
---[[
-    Handle input (Escape to cancel, right-click to cancel)
+    Handle input (Escape to cancel, right-click to cancel, left-click to place)
 ]]
 local function onInputBegan(input: InputObject, gameProcessed: boolean)
     if gameProcessed then return end
     
-    -- TODO: If input is Escape or right-click:
-    --         If isPlacing, cancelPlacement()
+    -- Escape or right-click to cancel
+    if input.KeyCode == Enum.KeyCode.Escape or input.UserInputType == Enum.UserInputType.MouseButton2 then
+        if isPlacing then
+            cancelPlacement()
+        end
+    end
     
-    -- TODO: If input is left-click:
-    --         If isPlacing, onMouseClick()
+    -- Left-click to place
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if isPlacing then
+            placeTower()
+        end
+    end
 end
 
 --[[
-    Listen for tower placement failures from server
+    Listen for tower placement result from server
 ]]
-local function onPlacementFailed(reason: string)
-    -- TODO: Show error message to player
-    -- TODO: Play error sound
-    -- TODO: Re-enable placement (don't cancel, let them try again)
+local function onPlaceTowerResult(success: boolean, message: string)
+    if not success then
+        warn("Tower placement failed:", message)
+        -- Could show UI feedback here
+    end
 end
 
 --[[
-    Listen for balance changes from server
+    Listen for changes to selected tower (from UI)
 ]]
-local function onBalanceChanged(newBalance: number)
-    -- TODO: Update playerMoney
-    -- TODO: If isPlacing and can no longer afford:
-    --         cancelPlacement()
+local function onSelectedTowerChanged()
+    local towerType = SelectedTowerValue.Value
+    
+    if towerType == "" then
+        -- Deselected
+        if isPlacing then
+            cancelPlacement()
+        end
+    else
+        -- Selected a tower type
+        startPlacement(towerType)
+    end
 end
 
 --[[
     Initialize client-side placement system
 ]]
 local function init()
-    -- TODO: Connect to UserInputService.InputBegan
-    -- TODO: Listen for RemoteEvent "TowerPlacementFailed"
-    -- TODO: Listen for RemoteEvent "BalanceChanged"
-    -- TODO: Listen for UI button clicks (when UI is created)
+    -- Connect to UserInputService
+    UserInputService.InputBegan:Connect(onInputBegan)
+    
+    -- Listen for placement results
+    PlaceTowerResultEvent.OnClientEvent:Connect(onPlaceTowerResult)
+    
+    -- Listen for tower selection changes
+    SelectedTowerValue.Changed:Connect(onSelectedTowerChanged)
     
     print("TowerPlacement client initialized!")
 end
@@ -149,7 +289,7 @@ end
 -- Initialize
 init()
 
--- Export functions for UI to call
+-- Export functions for UI to call (though UI now uses SelectedTowerValue)
 return {
     startPlacement = startPlacement,
     cancelPlacement = cancelPlacement,
