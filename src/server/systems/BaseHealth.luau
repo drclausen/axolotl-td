@@ -58,23 +58,6 @@ function BaseHealth.init()
 end
 
 --[[
-    Handle enemy reaching end of path
-    @param eventData: EnemyReachedEndEvent
-]]
-function BaseHealth.onEnemyReachedEnd(eventData)
-    if type(eventData) == "number" then
-        BaseHealth.takeDamage(eventData)
-        return
-    end
-    if type(eventData) == "table" then
-        local damage = eventData.damage or eventData.damageAmount
-        if type(damage) == "number" then
-            BaseHealth.takeDamage(damage)
-        end
-    end
-end
-
---[[
     Apply damage to base
     @param amount: number
 ]]

@@ -46,11 +46,11 @@ local totalWaves = #WaveConfig
 ]]
 function WaveManager.init()
     -- Subscribe to enemy lifecycle events
-    EventBus.on("EnemyKilled", function(enemyId: string, enemyType: string, reward: number)
+    EventBus.on("EnemyKilled", function()
         WaveManager._onEnemyRemoved()
     end)
     
-    EventBus.on("EnemyReachedEnd", function(enemyId: string, damage: number)
+    EventBus.on("EnemyReachedEnd", function()
         WaveManager._onEnemyRemoved()
     end)
     

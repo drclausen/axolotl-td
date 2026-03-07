@@ -165,7 +165,6 @@ Players.PlayerAdded:Connect(function(player)
         gameStarted = true
         task.wait(3) -- give player time to load
         print("[AxolotlTD] Starting game!")
-        updateBaseHealthEvent:FireAllClients(BaseHealth.getHealth(), BaseHealth.getMaxHealth())
         WaveManager.startGame()
     end
 end)
