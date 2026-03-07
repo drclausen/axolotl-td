@@ -1,154 +1,148 @@
 --[[
     init.server.luau
-    Main server entry point - wires all systems together
+    Main server script for Axolotl Tower Defense
     
     Responsibilities:
-    - Initialize all game systems in correct order
+    - Initialize all server systems
     - Create RemoteEvents for client-server communication
-    - Start game loop (prep phase → waves → game over)
-    - Handle base HP reaching 0 (game over)
-    - Handle all waves complete (victory)
-    
-    System initialization order:
-    1. EventBus (needed by all systems)
-    2. PathManager (needed by EnemyManager)
-    3. BaseHealth (standalone)
-    4. EnemyManager (needed by WaveManager)
-    5. EconomyManager (needed by TowerManager)
-    6. CombatSystem (needed by TowerManager)
-    7. TowerManager (depends on multiple systems)
-    8. WaveManager (orchestrates gameplay)
-    
-    Game flow:
-    1. Wait for players
-    2. Prep phase (10 seconds)
-    3. Wave 1 → Wave 10
-    4. Victory or Game Over
+    - Wire up EventBus listeners to RemoteEvents
+    - Handle player joining/leaving
+    - Start game when first player joins
+    - Track base health and game over state
 ]]
 
--- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
-local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 
--- Systems
-local EventBus = require(ReplicatedStorage.modules.EventBus)
-local PathManager = require(ServerScriptService.systems.PathManager)
-local BaseHealth = require(ServerScriptService.systems.BaseHealth)
-local EnemyManager = require(ServerScriptService.systems.EnemyManager)
-local EconomyManager = require(ServerScriptService.systems.EconomyManager)
-local CombatSystem = require(ServerScriptService.systems.CombatSystem)
-local TowerManager = require(ServerScriptService.systems.TowerManager)
-local WaveManager = require(ServerScriptService.systems.WaveManager)
+-- Wait for shared modules to be available
+local EventBus = require(ReplicatedStorage:WaitForChild("modules"):WaitForChild("EventBus"))
+local GameConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChild("GameConfig"))
+local WaveConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChild("WaveConfig"))
 
--- Game state
-local gameState = "Lobby" -- Lobby | Preparing | Active | Complete | GameOver
+-- Require server systems
+local PathManager = require(script:WaitForChild("systems"):WaitForChild("PathManager"))
+local EnemyManager = require(script:WaitForChild("systems"):WaitForChild("EnemyManager"))
+local WaveManager = require(script:WaitForChild("systems"):WaitForChild("WaveManager"))
+local CombatSystem = require(script:WaitForChild("systems"):WaitForChild("CombatSystem"))
+local EconomyManager = require(script:WaitForChild("systems"):WaitForChild("EconomyManager"))
+local TowerManager = require(script:WaitForChild("systems"):WaitForChild("TowerManager"))
 
---[[
-    Initialize all game systems
-]]
-local function initializeSystems()
-    print("Initializing Axolotl Tower Defense...")
-    
-    -- TODO: Initialize EventBus
-    -- TODO: Initialize PathManager
-    -- TODO: Initialize BaseHealth
-    -- TODO: Initialize EnemyManager
-    -- TODO: Initialize EconomyManager
-    -- TODO: Initialize CombatSystem
-    -- TODO: Initialize TowerManager
-    -- TODO: Initialize WaveManager
-    
-    print("All systems initialized!")
+-- Create RemoteEvents for client-server communication
+local function createRemote(name, className)
+    className = className or "RemoteEvent"
+    local remote = Instance.new(className)
+    remote.Name = name
+    remote.Parent = ReplicatedStorage
+    return remote
 end
 
---[[
-    Create RemoteEvents for client-server communication
-]]
-local function createRemoteEvents()
-    -- TODO: Create folder in ReplicatedStorage for RemoteEvents
-    -- TODO: Create RemoteEvent "PlaceTower"
-    -- TODO: Create RemoteEvent "BalanceChanged"
-    -- TODO: Create RemoteEvent "WaveStarted"
-    -- TODO: Create RemoteEvent "WaveCompleted"
-    -- TODO: Create RemoteEvent "BaseHealthChanged"
-    -- TODO: Create RemoteEvent "TowerPlaced"
-    -- TODO: Create RemoteEvent "TowerPlacementFailed"
-    -- TODO: Create RemoteEvent "GameOver"
-    -- TODO: Create RemoteEvent "Victory"
-    
-    print("RemoteEvents created!")
-end
+local placeTowerEvent = createRemote("PlaceTower")
+local updateBalanceEvent = createRemote("UpdateBalance")
+local updateWaveEvent = createRemote("UpdateWave")
+local updateBaseHealthEvent = createRemote("UpdateBaseHealth")
+local towerPlacementResultEvent = createRemote("TowerPlacementResult")
+local gameOverEvent = createRemote("GameOver")
+local victoryEvent = createRemote("Victory")
 
---[[
-    Start the game loop
-]]
-local function startGame()
-    -- TODO: Set gameState to "Preparing"
-    -- TODO: Fire "GameStarted" event
-    -- TODO: WaveManager will handle wave progression
-    
-    print("Game started!")
-end
+-- Create SelectedTower StringValue for client tower selection
+local selectedTower = Instance.new("StringValue")
+selectedTower.Name = "SelectedTower"
+selectedTower.Value = ""
+selectedTower.Parent = ReplicatedStorage
 
---[[
-    Handle game over
-]]
-local function onGameOver()
-    -- TODO: Set gameState to "GameOver"
-    -- TODO: Stop all systems (WaveManager, CombatSystem)
-    -- TODO: Fire RemoteEvent "GameOver" to all clients
-    -- TODO: Display final stats (wave reached, enemies killed, etc.)
-    
-    print("Game Over!")
-end
+-- Initialize all systems
+print("[AxolotlTD] Initializing systems...")
+PathManager.init()
+EnemyManager.init()
+WaveManager.init()
+CombatSystem.init()
+EconomyManager.init()
+TowerManager.init()
 
---[[
-    Handle victory
-]]
-local function onVictory()
-    -- TODO: Set gameState to "Complete"
-    -- TODO: Stop all systems
-    -- TODO: Fire RemoteEvent "Victory" to all clients
-    -- TODO: Display victory screen with stats
-    
-    print("Victory!")
-end
+-- BaseHealth setup
+local baseHP = GameConfig.baseHealth
+local gameOver = false
+local totalWaves = #WaveConfig
 
---[[
-    Main game loop (Heartbeat)
-]]
-local function gameLoop(dt: number)
-    -- TODO: Update WaveManager
-    -- TODO: Update CombatSystem
-    -- TODO: Update EnemyManager
-    
-    -- Game state checks happen via EventBus events
-end
+print("[AxolotlTD] Total waves:", totalWaves)
 
---[[
-    Main initialization
-]]
-local function main()
-    -- Create remote events first
-    createRemoteEvents()
-    
-    -- Initialize all systems
-    initializeSystems()
-    
-    -- Subscribe to game events
-    EventBus.on("GameOver", onGameOver)
-    EventBus.on("AllWavesComplete", onVictory)
-    
-    -- Connect game loop
-    RunService.Heartbeat:Connect(gameLoop)
-    
-    -- Wait for players, then start
-    -- TODO: For MVP, start immediately
-    -- TODO: For full version, wait for player count or ready-up
-    wait(3) -- Brief delay for initialization
-    startGame()
-end
+-- Wire up events
 
--- Run the game!
-main()
+-- Tower placement from client
+placeTowerEvent.OnServerEvent:Connect(function(player, towerType, position)
+    if gameOver then return end
+    local success, result = TowerManager.placeTower(player, towerType, position)
+    towerPlacementResultEvent:FireClient(player, success, result)
+    if success then
+        -- Update balance for this player
+        updateBalanceEvent:FireClient(player, EconomyManager.getBalance(player))
+    end
+end)
+
+-- Balance changes → client
+EventBus.on("BalanceChanged", function(player, amount)
+    updateBalanceEvent:FireClient(player, amount)
+end)
+
+-- Wave updates → all clients
+EventBus.on("WaveStarted", function(waveNumber)
+    updateWaveEvent:FireAllClients(waveNumber, totalWaves, "Active")
+end)
+
+EventBus.on("WaveCompleted", function(waveNumber)
+    updateWaveEvent:FireAllClients(waveNumber, totalWaves, "Preparing")
+end)
+
+-- Enemy reaches end → damage base
+EventBus.on("EnemyReachedEnd", function(enemyId, damage)
+    if gameOver then return end
+    baseHP -= damage
+    baseHP = math.max(0, baseHP)
+    updateBaseHealthEvent:FireAllClients(baseHP, GameConfig.baseHealth)
+    
+    if baseHP <= 0 then
+        gameOver = true
+        local currentWave = WaveManager.getCurrentWave()
+        gameOverEvent:FireAllClients(currentWave)
+        print("[AxolotlTD] GAME OVER at wave " .. currentWave)
+    end
+end)
+
+-- Victory
+EventBus.on("AllWavesComplete", function()
+    if gameOver then return end
+    gameOver = true
+    victoryEvent:FireAllClients()
+    print("[AxolotlTD] VICTORY!")
+end)
+
+-- Send initial state to joining players
+Players.PlayerAdded:Connect(function(player)
+    task.wait(1) -- let client load
+    updateBalanceEvent:FireClient(player, EconomyManager.getBalance(player))
+    updateBaseHealthEvent:FireClient(player, baseHP, GameConfig.baseHealth)
+    local currentWave = WaveManager.getCurrentWave()
+    local state = WaveManager.getState()
+    -- Convert state to display format
+    local displayState = "Preparing"
+    if state == "active" then
+        displayState = "Active"
+    elseif state == "complete" then
+        displayState = "Complete"
+    end
+    updateWaveEvent:FireClient(player, currentWave, totalWaves, displayState)
+end)
+
+-- Start the game when first player joins (or after a short delay)
+local gameStarted = false
+Players.PlayerAdded:Connect(function(player)
+    if not gameStarted then
+        gameStarted = true
+        task.wait(3) -- give player time to load
+        print("[AxolotlTD] Starting game!")
+        updateBaseHealthEvent:FireAllClients(baseHP, GameConfig.baseHealth)
+        WaveManager.startGame()
+    end
+end)
+
+print("[AxolotlTD] Server ready! Waiting for players...")
