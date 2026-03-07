@@ -1,0 +1,26 @@
+{
+  "name": "AxolotlTD",
+  "tree": {
+    "$className": "DataModel",
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$path": "src/server"
+    },
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "$path": "src/shared"
+    },
+    "StarterGui": {
+      "$className": "StarterGui",
+      "$path": "src/client/gui"
+    },
+    "StarterPlayerScripts": {
+      "$className": "StarterPlayerScripts",
+      "$path": "src/client/scripts"
+    },
+    "ServerStorage": {
+      "$className": "ServerStorage",
+      "$path": "src/storage"
+    }
+  }
+}
