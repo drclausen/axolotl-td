@@ -1,121 +1,52 @@
---[[
-    PathManager.luau
-    Manages the enemy path waypoints
-    
-    Responsibilities:
-    - Store ordered list of waypoints (Vector3 positions)
-    - Provide path data to enemy movement system
-    - Calculate total path distance
-    - Support waypoint lookup by index
-    
-    Implementation:
-    - Waypoints defined in workspace as Parts tagged "Waypoint"
-    - Each waypoint has NumberValue "Order" attribute for sequencing
-    - On init, collect and sort waypoints by Order
-    
-    State:
-    - waypoints: Array<Vector3>
-    - totalDistance: number
-    
-    Methods:
-    - getWaypoints(): Array<Vector3>
-    - getNextWaypoint(currentIndex): Vector3?
-    - getTotalDistance(): number
-]]
+local CollectionService = game:GetService("CollectionService")
 
 local PathManager = {}
 
--- Services
-local CollectionService = game:GetService("CollectionService")
+local waypoints: {Vector3} = {}
 
--- Private state
-local waypoints = {}
-local totalDistance = 0
-
---[[
-    Initialize PathManager
-    Collects waypoints from workspace and sorts them
-]]
 function PathManager.init()
-    -- TODO: Get all parts tagged with "Waypoint" using CollectionService
-    -- TODO: For each waypoint part:
-    --         Find NumberValue child named "Order"
-    --         Store {order, position} in temp table
-    -- TODO: Sort temp table by order
-    -- TODO: Extract positions into waypoints array
-    -- TODO: Calculate totalDistance by summing distances between consecutive waypoints
-    -- TODO: If no waypoints found, warn and create default path
+	-- Find all parts tagged "Waypoint" in workspace
+	-- Each must have a NumberValue child named "Order"
+	-- Sort by Order value ascending
+	-- Store their Position (Vector3) in waypoints array
+	local waypointParts = CollectionService:GetTagged("Waypoint")
+	local sorted = {}
+	for _, part in ipairs(waypointParts) do
+		local orderValue = part:FindFirstChild("Order")
+		if orderValue and orderValue:IsA("NumberValue") then
+			table.insert(sorted, {order = orderValue.Value, position = part.Position})
+		end
+	end
+	table.sort(sorted, function(a, b) return a.order < b.order end)
+	waypoints = {}
+	for _, wp in ipairs(sorted) do
+		table.insert(waypoints, wp.position)
+	end
+	print("[PathManager] Initialized with " .. #waypoints .. " waypoints")
 end
 
---[[
-    Get all waypoints
-    @return Array<Vector3>
-]]
 function PathManager.getWaypoints(): {Vector3}
-    return waypoints
+	return waypoints
 end
 
---[[
-    Get a specific waypoint by index
-    @param index: number - 1-based index
-    @return Vector3?
-]]
 function PathManager.getWaypoint(index: number): Vector3?
-    -- TODO: Return waypoints[index] or nil if out of bounds
-    return nil
+	return waypoints[index]
 end
 
---[[
-    Get next waypoint after current index
-    @param currentIndex: number
-    @return Vector3?
-]]
 function PathManager.getNextWaypoint(currentIndex: number): Vector3?
-    -- TODO: Return waypoints[currentIndex + 1] or nil if at end
-    return nil
+	return waypoints[currentIndex + 1]
 end
 
---[[
-    Get total distance of the path
-    @return number
-]]
-function PathManager.getTotalDistance(): number
-    return totalDistance
-end
-
---[[
-    Get number of waypoints
-    @return number
-]]
 function PathManager.getWaypointCount(): number
-    return #waypoints
+	return #waypoints
 end
 
---[[
-    Check if index is the last waypoint
-    @param index: number
-    @return boolean
-]]
-function PathManager.isLastWaypoint(index: number): boolean
-    return index >= #waypoints
-end
-
---[[
-    Create default path if no waypoints found
-    Used for testing/development
-]]
-function PathManager.createDefaultPath()
-    -- TODO: Create a simple straight line path
-    -- TODO: Waypoints at (0, 0, 0), (50, 0, 0), (100, 0, 0), etc.
-    warn("PathManager: No waypoints found, using default path")
-end
-
---[[
-    Visualize path with lines (debug helper)
-]]
-function PathManager.visualizePath()
-    -- TODO: Create Part attachments between consecutive waypoints
-    -- TODO: Use Beams or LineHandleAdornments to draw path
+function PathManager.getTotalDistance(): number
+	local total = 0
+	for i = 1, #waypoints - 1 do
+		total += (waypoints[i + 1] - waypoints[i]).Magnitude
+	end
+	return total
 end
 
 return PathManager

@@ -1,72 +1,101 @@
 --[[
-    EventBus.luau
-    Simple pub/sub event system for cross-system communication
+    EventBus - Pure Luau event system
     
-    Responsibilities:
-    - Provide centralized event management
-    - Allow systems to subscribe to events without tight coupling
-    - Support multiple listeners per event
-    - Handle event firing with arbitrary arguments
+    A lightweight callback registry for decoupled event communication.
+    No BindableEvents - works in pure Luau testing environments.
     
-    Usage:
-        EventBus.on("EnemyKilled", function(enemyData)
-            print("Enemy killed:", enemyData.type)
-        end)
-        
-        EventBus.fire("EnemyKilled", {type = "Tadpole", reward = 5})
-        
-        EventBus.off("EnemyKilled", callback)
+    Methods:
+        - on(eventName, callback) - Register a listener
+        - off(eventName, callback) - Unregister a listener
+        - fire(eventName, ...) - Invoke all listeners for an event
+        - clear(eventName) - Remove all listeners for an event
 ]]
 
 local EventBus = {}
 
--- Private state
-local events = {}
+-- Private table mapping event names to arrays of callbacks
+local _listeners: { [string]: { (...any) -> () } } = {}
 
 --[[
-    Subscribe to an event
-    @param eventName: string - Name of the event to listen for
-    @param callback: function - Function to call when event fires
-    @return connection: table - Object with Disconnect method
+    Register a callback for an event.
+    
+    @param eventName string - The event to listen for
+    @param callback function - The function to invoke when event fires
 ]]
 function EventBus.on(eventName: string, callback: (...any) -> ())
-    -- TODO: Store callback in events table
-    -- TODO: Return connection object with Disconnect method
+    assert(type(eventName) == "string", "eventName must be a string")
+    assert(type(callback) == "function", "callback must be a function")
+    
+    if not _listeners[eventName] then
+        _listeners[eventName] = {}
+    end
+    
+    table.insert(_listeners[eventName], callback)
 end
 
 --[[
-    Unsubscribe from an event
-    @param eventName: string - Name of the event
-    @param callback: function - Specific callback to remove
+    Unregister a callback for an event.
+    Uses reference equality to identify the callback.
+    
+    @param eventName string - The event to stop listening to
+    @param callback function - The exact function reference to remove
 ]]
 function EventBus.off(eventName: string, callback: (...any) -> ())
-    -- TODO: Remove callback from events table
+    assert(type(eventName) == "string", "eventName must be a string")
+    assert(type(callback) == "function", "callback must be a function")
+    
+    local listeners = _listeners[eventName]
+    if not listeners then
+        return
+    end
+    
+    -- Remove by reference equality
+    for i = #listeners, 1, -1 do
+        if listeners[i] == callback then
+            table.remove(listeners, i)
+        end
+    end
+    
+    -- Clean up empty listener arrays
+    if #listeners == 0 then
+        _listeners[eventName] = nil
+    end
 end
 
 --[[
-    Fire an event to all subscribers
-    @param eventName: string - Name of the event to fire
-    @param ...: any - Arguments to pass to callbacks
+    Invoke all registered listeners for an event.
+    Uses pcall to prevent one failing listener from breaking others.
+    
+    @param eventName string - The event to fire
+    @param ... any - Arguments to pass to all listeners
 ]]
-function EventBus.fire(eventName: string, ...)
-    -- TODO: Call all registered callbacks for this event
-    -- TODO: Pass arguments to each callback
-    -- TODO: Handle errors gracefully (pcall)
+function EventBus.fire(eventName: string, ...: any)
+    assert(type(eventName) == "string", "eventName must be a string")
+    
+    local listeners = _listeners[eventName]
+    if not listeners then
+        return
+    end
+    
+    -- Iterate over a shallow copy to allow listeners to unregister during fire
+    local listenersCopy = table.clone(listeners)
+    
+    for _, callback in listenersCopy do
+        local success, err = pcall(callback, ...)
+        if not success then
+            warn(string.format("EventBus: Error in listener for '%s': %s", eventName, tostring(err)))
+        end
+    end
 end
 
 --[[
-    Clear all subscribers for an event (useful for cleanup)
-    @param eventName: string - Name of the event to clear
+    Remove all listeners for a specific event.
+    
+    @param eventName string - The event to clear
 ]]
 function EventBus.clear(eventName: string)
-    -- TODO: Remove all callbacks for this event
-end
-
---[[
-    Clear all events (use sparingly, mainly for testing)
-]]
-function EventBus.clearAll()
-    -- TODO: Reset events table
+    assert(type(eventName) == "string", "eventName must be a string")
+    _listeners[eventName] = nil
 end
 
 return EventBus
