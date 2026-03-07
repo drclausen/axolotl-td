@@ -40,13 +40,13 @@ local mouse = player:GetMouse()
 
 -- Wait for RemoteEvents
 local PlaceTowerEvent = ReplicatedStorage:WaitForChild("PlaceTower")
-local PlaceTowerResultEvent = ReplicatedStorage:WaitForChild("PlaceTowerResult")
+local TowerPlacementResultEvent = ReplicatedStorage:WaitForChild("TowerPlacementResult")
 
 -- Wait for shared state (used by UI to communicate selected tower)
 local SelectedTowerValue = ReplicatedStorage:WaitForChild("SelectedTower")
 
 -- Config
-local TowerConfig = require(ReplicatedStorage.config.TowerConfig)
+local TowerConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChild("TowerConfig"))
 
 -- State
 local selectedTowerType = nil
@@ -58,8 +58,9 @@ local renderConnection = nil
 -- Constants
 local VALID_COLOR = Color3.fromRGB(0, 255, 0) -- Green
 local INVALID_COLOR = Color3.fromRGB(255, 0, 0) -- Red
-local MIN_TOWER_SPACING = 8 -- Minimum distance between towers
+local MIN_TOWER_SPACING = 4 -- Must match server-side validation in TowerManager
 local GHOST_TRANSPARENCY = 0.5
+local cancelPlacement
 
 --[[
     Create a ghost model for the selected tower type
@@ -79,7 +80,7 @@ local function createGhostModel(towerType: string)
     
     local part = Instance.new("Part")
     part.Name = "Base"
-    part.Size = Vector3.new(4, 6, 4)
+    part.Size = Vector3.new(3, 1, 3)
     part.Anchored = true
     part.CanCollide = false
     part.Transparency = GHOST_TRANSPARENCY
@@ -143,7 +144,7 @@ local function updateGhostPosition()
     
     -- Move ghost to mouse position
     if ghostModel.PrimaryPart then
-        ghostModel:SetPrimaryPartCFrame(CFrame.new(position.X, position.Y + 3, position.Z))
+        ghostModel:SetPrimaryPartCFrame(CFrame.new(position.X, position.Y + 0.5, position.Z))
         
         -- Check if placement is valid
         canPlace = isValidPlacement(position)
@@ -183,7 +184,7 @@ end
 --[[
     Cancel tower placement
 ]]
-local function cancelPlacement()
+cancelPlacement = function()
     isPlacing = false
     canPlace = false
     selectedTowerType = nil
@@ -278,7 +279,7 @@ local function init()
     UserInputService.InputBegan:Connect(onInputBegan)
     
     -- Listen for placement results
-    PlaceTowerResultEvent.OnClientEvent:Connect(onPlaceTowerResult)
+    TowerPlacementResultEvent.OnClientEvent:Connect(onPlaceTowerResult)
     
     -- Listen for tower selection changes
     SelectedTowerValue.Changed:Connect(onSelectedTowerChanged)

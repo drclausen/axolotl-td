@@ -28,19 +28,33 @@
 
 local BaseHealth = {}
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local GameConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChild("GameConfig"))
+local EventBus = require(ReplicatedStorage:WaitForChild("modules"):WaitForChild("EventBus"))
+
 -- Private state
 local currentHealth = 100
 local maxHealth = 100
+local initialized = false
 
 --[[
     Initialize BaseHealth
     Sets up event listeners and initial health
 ]]
 function BaseHealth.init()
-    -- TODO: Load maxHealth from GameConfig
-    -- TODO: Set currentHealth to maxHealth
-    -- TODO: Subscribe to "EnemyReachedEnd" event
-    -- TODO: Fire initial "BaseHealthChanged" event to clients
+    if initialized then
+        return
+    end
+    initialized = true
+
+    maxHealth = GameConfig.baseHealth
+    currentHealth = maxHealth
+
+    EventBus.on("EnemyReachedEnd", function(_enemyId: string, damage: number)
+        BaseHealth.takeDamage(damage)
+    end)
+
+    EventBus.fire("BaseHealthChanged", currentHealth, maxHealth)
 end
 
 --[[
@@ -48,8 +62,16 @@ end
     @param eventData: EnemyReachedEndEvent
 ]]
 function BaseHealth.onEnemyReachedEnd(eventData)
-    -- TODO: Extract damage amount from eventData
-    -- TODO: Call takeDamage(amount)
+    if type(eventData) == "number" then
+        BaseHealth.takeDamage(eventData)
+        return
+    end
+    if type(eventData) == "table" then
+        local damage = eventData.damage or eventData.damageAmount
+        if type(damage) == "number" then
+            BaseHealth.takeDamage(damage)
+        end
+    end
 end
 
 --[[
@@ -57,11 +79,16 @@ end
     @param amount: number
 ]]
 function BaseHealth.takeDamage(amount: number)
-    -- TODO: Reduce currentHealth by amount (min 0)
-    -- TODO: Fire "BaseHealthChanged" event with {newHealth, maxHealth}
-    -- TODO: If currentHealth <= 0:
-    --         Fire "GameOver" event
-    --         Trigger game over logic
+    if amount <= 0 or currentHealth <= 0 then
+        return
+    end
+
+    currentHealth = math.max(0, currentHealth - amount)
+    EventBus.fire("BaseHealthChanged", currentHealth, maxHealth)
+
+    if currentHealth <= 0 then
+        EventBus.fire("GameOver")
+    end
 end
 
 --[[
@@ -85,16 +112,18 @@ end
     @return number - 0 to 1
 ]]
 function BaseHealth.getHealthPercent(): number
-    -- TODO: Return currentHealth / maxHealth
-    return 1
+    if maxHealth <= 0 then
+        return 0
+    end
+    return currentHealth / maxHealth
 end
 
 --[[
     Reset health (for new game)
 ]]
 function BaseHealth.reset()
-    -- TODO: Set currentHealth to maxHealth
-    -- TODO: Fire "BaseHealthChanged" event
+    currentHealth = maxHealth
+    EventBus.fire("BaseHealthChanged", currentHealth, maxHealth)
 end
 
 --[[

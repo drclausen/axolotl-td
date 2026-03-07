@@ -16,20 +16,29 @@ local Players = game:GetService("Players")
 
 -- Wait for shared modules to be available
 local EventBus = require(ReplicatedStorage:WaitForChild("modules"):WaitForChild("EventBus"))
-local GameConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChild("GameConfig"))
 local WaveConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChild("WaveConfig"))
 
 -- Require server systems
-local PathManager = require(script:WaitForChild("systems"):WaitForChild("PathManager"))
-local EnemyManager = require(script:WaitForChild("systems"):WaitForChild("EnemyManager"))
-local WaveManager = require(script:WaitForChild("systems"):WaitForChild("WaveManager"))
-local CombatSystem = require(script:WaitForChild("systems"):WaitForChild("CombatSystem"))
-local EconomyManager = require(script:WaitForChild("systems"):WaitForChild("EconomyManager"))
-local TowerManager = require(script:WaitForChild("systems"):WaitForChild("TowerManager"))
+local systemsFolder = script.Parent:WaitForChild("systems")
+local PathManager = require(systemsFolder:WaitForChild("PathManager"))
+local EnemyManager = require(systemsFolder:WaitForChild("EnemyManager"))
+local WaveManager = require(systemsFolder:WaitForChild("WaveManager"))
+local CombatSystem = require(systemsFolder:WaitForChild("CombatSystem"))
+local EconomyManager = require(systemsFolder:WaitForChild("EconomyManager"))
+local BaseHealth = require(systemsFolder:WaitForChild("BaseHealth"))
+local TowerManager = require(systemsFolder:WaitForChild("TowerManager"))
 
 -- Create RemoteEvents for client-server communication
 local function createRemote(name, className)
     className = className or "RemoteEvent"
+    local existing = ReplicatedStorage:FindFirstChild(name)
+    if existing then
+        if existing.ClassName ~= className then
+            existing:Destroy()
+        else
+            return existing
+        end
+    end
     local remote = Instance.new(className)
     remote.Name = name
     remote.Parent = ReplicatedStorage
@@ -45,10 +54,16 @@ local gameOverEvent = createRemote("GameOver")
 local victoryEvent = createRemote("Victory")
 
 -- Create SelectedTower StringValue for client tower selection
-local selectedTower = Instance.new("StringValue")
-selectedTower.Name = "SelectedTower"
-selectedTower.Value = ""
-selectedTower.Parent = ReplicatedStorage
+local selectedTower = ReplicatedStorage:FindFirstChild("SelectedTower")
+if not selectedTower or not selectedTower:IsA("StringValue") then
+    if selectedTower then
+        selectedTower:Destroy()
+    end
+    selectedTower = Instance.new("StringValue")
+    selectedTower.Name = "SelectedTower"
+    selectedTower.Value = ""
+    selectedTower.Parent = ReplicatedStorage
+end
 
 -- Initialize all systems
 print("[AxolotlTD] Initializing systems...")
@@ -57,10 +72,9 @@ EnemyManager.init()
 WaveManager.init()
 CombatSystem.init()
 EconomyManager.init()
+BaseHealth.init()
 TowerManager.init()
 
--- BaseHealth setup
-local baseHP = GameConfig.baseHealth
 local gameOver = false
 local totalWaves = #WaveConfig
 
@@ -71,6 +85,14 @@ print("[AxolotlTD] Total waves:", totalWaves)
 -- Tower placement from client
 placeTowerEvent.OnServerEvent:Connect(function(player, towerType, position)
     if gameOver then return end
+    if type(towerType) ~= "string" then
+        towerPlacementResultEvent:FireClient(player, false, "Invalid tower type")
+        return
+    end
+    if typeof(position) ~= "Vector3" then
+        towerPlacementResultEvent:FireClient(player, false, "Invalid placement position")
+        return
+    end
     local success, result = TowerManager.placeTower(player, towerType, position)
     towerPlacementResultEvent:FireClient(player, success, result)
     if success then
@@ -94,18 +116,16 @@ EventBus.on("WaveCompleted", function(waveNumber)
 end)
 
 -- Enemy reaches end → damage base
-EventBus.on("EnemyReachedEnd", function(enemyId, damage)
+EventBus.on("BaseHealthChanged", function(currentHealth, maxHealth)
+    updateBaseHealthEvent:FireAllClients(currentHealth, maxHealth)
+end)
+
+EventBus.on("GameOver", function()
     if gameOver then return end
-    baseHP -= damage
-    baseHP = math.max(0, baseHP)
-    updateBaseHealthEvent:FireAllClients(baseHP, GameConfig.baseHealth)
-    
-    if baseHP <= 0 then
-        gameOver = true
-        local currentWave = WaveManager.getCurrentWave()
-        gameOverEvent:FireAllClients(currentWave)
-        print("[AxolotlTD] GAME OVER at wave " .. currentWave)
-    end
+    gameOver = true
+    local currentWave = WaveManager.getCurrentWave()
+    gameOverEvent:FireAllClients(currentWave)
+    print("[AxolotlTD] GAME OVER at wave " .. currentWave)
 end)
 
 -- Victory
@@ -120,7 +140,7 @@ end)
 Players.PlayerAdded:Connect(function(player)
     task.wait(1) -- let client load
     updateBalanceEvent:FireClient(player, EconomyManager.getBalance(player))
-    updateBaseHealthEvent:FireClient(player, baseHP, GameConfig.baseHealth)
+    updateBaseHealthEvent:FireClient(player, BaseHealth.getHealth(), BaseHealth.getMaxHealth())
     local currentWave = WaveManager.getCurrentWave()
     local state = WaveManager.getState()
     -- Convert state to display format
@@ -140,7 +160,7 @@ Players.PlayerAdded:Connect(function(player)
         gameStarted = true
         task.wait(3) -- give player time to load
         print("[AxolotlTD] Starting game!")
-        updateBaseHealthEvent:FireAllClients(baseHP, GameConfig.baseHealth)
+        updateBaseHealthEvent:FireAllClients(BaseHealth.getHealth(), BaseHealth.getMaxHealth())
         WaveManager.startGame()
     end
 end)

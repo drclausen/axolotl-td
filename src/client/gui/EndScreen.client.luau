@@ -27,6 +27,7 @@ local VictoryEvent = ReplicatedStorage:WaitForChild("Victory")
 local screenGui
 local gameOverFrame
 local victoryFrame
+local restartHintLabel
 
 --[[
     Create the main ScreenGui
@@ -94,6 +95,17 @@ local function createGameOverScreen()
     restartButton.TextSize = 32
     restartButton.Font = Enum.Font.GothamBold
     restartButton.Parent = gameOverFrame
+
+    restartHintLabel = Instance.new("TextLabel")
+    restartHintLabel.Name = "RestartHint"
+    restartHintLabel.Size = UDim2.new(0, 600, 0, 40)
+    restartHintLabel.Position = UDim2.new(0.5, -300, 0.82, 0)
+    restartHintLabel.BackgroundTransparency = 1
+    restartHintLabel.Text = ""
+    restartHintLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    restartHintLabel.TextSize = 20
+    restartHintLabel.Font = Enum.Font.Gotham
+    restartHintLabel.Parent = gameOverFrame
     
     -- Button hover effect
     restartButton.MouseEnter:Connect(function()
@@ -108,13 +120,12 @@ local function createGameOverScreen()
     restartButton.MouseButton1Click:Connect(function()
         -- Try to teleport to same place (restart)
         local placeId = game.PlaceId
-        local success, err = pcall(function()
+        local success = pcall(function()
             TeleportService:Teleport(placeId, player)
         end)
         
         if not success then
-            -- Fallback: show chat message
-            player:Kick("Game over! Rejoin to play again.")
+            restartHintLabel.Text = "Teleport failed. Rejoin this server manually to restart."
         end
     end)
     
@@ -190,13 +201,15 @@ local function createVictoryScreen()
     playAgainButton.MouseButton1Click:Connect(function()
         -- Try to teleport to same place (restart)
         local placeId = game.PlaceId
-        local success, err = pcall(function()
+        local success = pcall(function()
             TeleportService:Teleport(placeId, player)
         end)
         
         if not success then
-            -- Fallback: show chat message
-            player:Kick("Victory! Rejoin to play again.")
+            local subtitle = victoryFrame:FindFirstChild("Subtitle")
+            if subtitle and subtitle:IsA("TextLabel") then
+                subtitle.Text = "Teleport failed. Rejoin manually to play again."
+            end
         end
     end)
     

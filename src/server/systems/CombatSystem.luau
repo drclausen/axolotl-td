@@ -23,7 +23,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local TowerConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChild("TowerConfig"))
 local EnemyManager = require(script.Parent:WaitForChild("EnemyManager"))
-local EventBus = require(ReplicatedStorage:WaitForChild("modules"):WaitForChild("EventBus"))
 
 local CombatSystem = {}
 

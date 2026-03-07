@@ -25,8 +25,8 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- Config
-local TowerConfig = require(ReplicatedStorage.config.TowerConfig)
-local GameConfig = require(ReplicatedStorage.config.GameConfig)
+local TowerConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChild("TowerConfig"))
+local GameConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChild("GameConfig"))
 
 -- Player
 local player = Players.LocalPlayer
@@ -38,14 +38,8 @@ local UpdateWaveEvent = ReplicatedStorage:WaitForChild("UpdateWave")
 local UpdateBaseHealthEvent = ReplicatedStorage:WaitForChild("UpdateBaseHealth")
 local TowerPlacementResultEvent = ReplicatedStorage:WaitForChild("TowerPlacementResult")
 
--- Create or get SelectedTower value
-local SelectedTowerValue = ReplicatedStorage:FindFirstChild("SelectedTower")
-if not SelectedTowerValue then
-    SelectedTowerValue = Instance.new("StringValue")
-    SelectedTowerValue.Name = "SelectedTower"
-    SelectedTowerValue.Value = ""
-    SelectedTowerValue.Parent = ReplicatedStorage
-end
+-- SelectedTower is created on the server during bootstrap.
+local SelectedTowerValue = ReplicatedStorage:WaitForChild("SelectedTower")
 
 -- State
 local currentBalance = GameConfig.startingMoney
