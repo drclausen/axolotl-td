@@ -6,82 +6,148 @@
     - Each tower finds nearest enemy in range every tick
     - Apply damage based on tower stats and fire rate cooldown
     - Create visual projectiles (simple part tween from tower to enemy)
-    - Handle enemy death → fire "EnemyKilled" event with enemy data
     - Track tower cooldowns
     
     State:
     - towers: Map<towerId, TowerData>
-    - towerCooldowns: Map<towerId, number>
     
     Dependencies:
     - TowerConfig (stats)
-    - EnemyManager (enemy positions, health)
-    - EventBus (death notifications)
+    - EnemyManager (enemy positions, damage)
+    - EventBus (for potential future events)
 ]]
+
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local TowerConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChild("TowerConfig"))
+local EnemyManager = require(script.Parent:WaitForChild("EnemyManager"))
+local EventBus = require(ReplicatedStorage:WaitForChild("modules"):WaitForChild("EventBus"))
 
 local CombatSystem = {}
 
 -- Private state
-local towers = {}
-local towerCooldowns = {}
+local towers = {} -- Map<towerId, TowerData & { lastFired: number }>
+local initialized = false
 
 --[[
     Initialize CombatSystem
-    Sets up Heartbeat connection for combat ticks
+    Sets up Heartbeat connection for combat loop
 ]]
 function CombatSystem.init()
-    -- TODO: Connect to RunService.Heartbeat for combat loop
-    -- TODO: Subscribe to "TowerPlaced" event to register new towers
-    -- TODO: Subscribe to "TowerRemoved" event to unregister towers
+    if initialized then
+        warn("[CombatSystem] Already initialized")
+        return
+    end
+    
+    initialized = true
+    
+    -- Connect to Heartbeat for combat ticks
+    RunService.Heartbeat:Connect(function(dt)
+        CombatSystem._tick(dt)
+    end)
+    
+    print("[CombatSystem] Initialized")
 end
 
 --[[
     Register a tower for combat
-    @param towerData: TowerData - Tower to register
+    @param towerData: { id: string, towerType: string, position: Vector3, model: Model }
 ]]
 function CombatSystem.registerTower(towerData)
-    -- TODO: Add tower to towers table
-    -- TODO: Initialize cooldown to 0
+    assert(towerData.id, "towerData must have an id")
+    assert(towerData.towerType, "towerData must have a towerType")
+    assert(towerData.position, "towerData must have a position")
+    assert(towerData.model, "towerData must have a model")
+    
+    local config = TowerConfig[towerData.towerType]
+    if not config then
+        warn("[CombatSystem] Unknown tower type: " .. towerData.towerType)
+        return
+    end
+    
+    -- Store tower with combat tracking data
+    towers[towerData.id] = {
+        id = towerData.id,
+        towerType = towerData.towerType,
+        position = towerData.position,
+        model = towerData.model,
+        range = config.range,
+        fireRate = config.fireRate,
+        damage = config.damage,
+        lastFired = -math.huge, -- Allow immediate first shot
+    }
+    
+    print("[CombatSystem] Registered tower:", towerData.id, towerData.towerType)
 end
 
 --[[
     Unregister a tower (sold/destroyed)
     @param towerId: string - ID of tower to remove
 ]]
-function CombatSystem.unregisterTower(towerId: string)
-    -- TODO: Remove tower from towers table
-    -- TODO: Remove cooldown entry
+function CombatSystem.removeTower(towerId: string)
+    if towers[towerId] then
+        towers[towerId] = nil
+        print("[CombatSystem] Removed tower:", towerId)
+    end
 end
 
 --[[
     Combat tick (called every Heartbeat)
     @param dt: number - Delta time in seconds
 ]]
-function CombatSystem.tick(dt: number)
-    -- TODO: For each tower:
-    --   1. Update cooldown (subtract dt)
-    --   2. If cooldown <= 0:
-    --      a. Find nearest enemy in range
-    --      b. If enemy found:
-    --         - Create projectile visual (part tween)
-    --         - Apply damage to enemy
-    --         - Reset cooldown based on fireRate (1 / fireRate)
-    --      c. If enemy health <= 0:
-    --         - Fire "EnemyKilled" event with enemy data
-    --         - Remove enemy from world
+function CombatSystem._tick(dt: number)
+    local currentTime = os.clock()
+    
+    for towerId, tower in pairs(towers) do
+        -- Check cooldown (time since last shot must exceed 1/fireRate)
+        local cooldownTime = 1 / tower.fireRate
+        local timeSinceLastFired = currentTime - tower.lastFired
+        
+        if timeSinceLastFired >= cooldownTime then
+            -- Find nearest enemy in range
+            local targetId, targetPos = CombatSystem._findNearestEnemy(tower.position, tower.range)
+            
+            if targetId and targetPos then
+                -- Apply damage
+                EnemyManager.takeDamage(targetId, tower.damage)
+                
+                -- Create projectile visual
+                CombatSystem._createProjectile(tower.position, targetPos)
+                
+                -- Update cooldown
+                tower.lastFired = currentTime
+            end
+        end
+    end
 end
 
 --[[
     Find nearest enemy to a tower within range
     @param towerPosition: Vector3
     @param range: number
-    @return EnemyData? - Nearest enemy or nil
+    @return (string?, Vector3?) - (enemyId, position) or (nil, nil)
 ]]
-function CombatSystem.findNearestEnemy(towerPosition: Vector3, range: number)
-    -- TODO: Get all alive enemies from EnemyManager
-    -- TODO: Filter enemies within range
-    -- TODO: Return enemy with smallest distance
-    -- TODO: Return nil if no enemies in range
+function CombatSystem._findNearestEnemy(towerPosition: Vector3, range: number): (string?, Vector3?)
+    local allEnemies = EnemyManager.getAllEnemies()
+    local nearestId = nil
+    local nearestPos = nil
+    local nearestDist = math.huge
+    
+    for enemyId, enemyData in pairs(allEnemies) do
+        local enemyPos = EnemyManager.getEnemyPosition(enemyId)
+        if enemyPos then
+            local dist = (enemyPos - towerPosition).Magnitude
+            if dist <= range and dist < nearestDist then
+                nearestDist = dist
+                nearestId = enemyId
+                nearestPos = enemyPos
+            end
+        end
+    end
+    
+    return nearestId, nearestPos
 end
 
 --[[
@@ -89,23 +155,47 @@ end
     @param startPos: Vector3
     @param endPos: Vector3
 ]]
-function CombatSystem.createProjectile(startPos: Vector3, endPos: Vector3)
-    -- TODO: Create a Part for the projectile
-    -- TODO: Position at startPos
-    -- TODO: Tween to endPos over ~0.2 seconds
-    -- TODO: Destroy part when tween completes
+function CombatSystem._createProjectile(startPos: Vector3, endPos: Vector3)
+    -- Create a simple projectile part
+    local projectile = Instance.new("Part")
+    projectile.Name = "Projectile"
+    projectile.Size = Vector3.new(0.5, 0.5, 0.5)
+    projectile.Position = startPos + Vector3.new(0, 1, 0) -- Slightly above tower
+    projectile.Anchored = true
+    projectile.CanCollide = false
+    projectile.Color = Color3.fromRGB(255, 255, 0) -- Yellow
+    projectile.Material = Enum.Material.Neon
+    projectile.Shape = Enum.PartType.Ball
+    projectile.Parent = workspace
+    
+    -- Tween to enemy position
+    local tweenInfo = TweenInfo.new(
+        0.2, -- Duration: 0.2 seconds
+        Enum.EasingStyle.Linear,
+        Enum.EasingDirection.Out
+    )
+    
+    local goal = { Position = endPos + Vector3.new(0, 1, 0) } -- Match enemy height
+    local tween = TweenService:Create(projectile, tweenInfo, goal)
+    
+    -- Destroy projectile when tween completes
+    tween.Completed:Connect(function()
+        projectile:Destroy()
+    end)
+    
+    tween:Play()
 end
 
 --[[
-    Apply damage to an enemy
-    @param enemyData: EnemyData
-    @param damage: number
-    @return boolean - true if enemy died
+    Get count of registered towers
+    @return number
 ]]
-function CombatSystem.damageEnemy(enemyData, damage: number): boolean
-    -- TODO: Reduce enemy currentHealth by damage
-    -- TODO: Update enemy health display (if exists)
-    -- TODO: Return true if currentHealth <= 0
+function CombatSystem.getTowerCount(): number
+    local count = 0
+    for _ in pairs(towers) do
+        count += 1
+    end
+    return count
 end
 
 --[[
