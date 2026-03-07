@@ -11,10 +11,12 @@ function PathManager.init()
 	-- Store their Position (Vector3) in waypoints array
 	local waypointParts = CollectionService:GetTagged("Waypoint")
 	local sorted = {}
-	for _, part in ipairs(waypointParts) do
-		local orderValue = part:FindFirstChild("Order")
-		if orderValue and orderValue:IsA("NumberValue") then
-			table.insert(sorted, {order = orderValue.Value, position = part.Position})
+	for _, waypoint in ipairs(waypointParts) do
+		if waypoint:IsA("BasePart") then
+			local orderValue = waypoint:FindFirstChild("Order")
+			if orderValue and orderValue:IsA("NumberValue") then
+				table.insert(sorted, {order = orderValue.Value, position = waypoint.Position})
+			end
 		end
 	end
 	table.sort(sorted, function(a, b) return a.order < b.order end)

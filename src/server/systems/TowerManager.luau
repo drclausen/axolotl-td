@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local TowerConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChild("TowerConfig"))
+local GameConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChild("GameConfig"))
 local EventBus = require(ReplicatedStorage:WaitForChild("modules"):WaitForChild("EventBus"))
 local EconomyManager = require(script.Parent:WaitForChild("EconomyManager"))
 local CombatSystem = require(script.Parent:WaitForChild("CombatSystem"))
@@ -9,6 +10,22 @@ local TowerManager = {}
 local towers: {[string]: any} = {}
 local nextId = 0
 local MIN_TOWER_DISTANCE = 4 -- minimum studs between towers
+local MIN_PLACEMENT_Y = -5
+local MAX_PLACEMENT_Y = 10
+
+local function isFiniteNumber(value: number): boolean
+    return value == value and value > -math.huge and value < math.huge
+end
+
+function TowerManager.isPlacementValid(position: Vector3): (boolean, string?)
+    if not isFiniteNumber(position.X) or not isFiniteNumber(position.Y) or not isFiniteNumber(position.Z) then
+        return false, "Invalid placement position"
+    end
+    if position.Y < MIN_PLACEMENT_Y or position.Y > MAX_PLACEMENT_Y then
+        return false, "Tower must be placed on valid ground"
+    end
+    return true, nil
+end
 
 function TowerManager.init()
     -- Create Towers folder in workspace
@@ -29,6 +46,13 @@ function TowerManager.placeTower(player: Player, towerType: string, position: Ve
     local config = TowerConfig[towerType]
     if not config then
         return false, "Unknown tower type"
+    end
+    local placementValid, placementError = TowerManager.isPlacementValid(position)
+    if not placementValid then
+        return false, placementError or "Invalid placement"
+    end
+    if TowerManager.getTowerCount() >= GameConfig.maxTowers then
+        return false, "Tower limit reached"
     end
     if not EconomyManager.canAfford(player, config.cost) then
         return false, "Not enough money"
@@ -114,7 +138,7 @@ function TowerManager.placeTower(player: Player, towerType: string, position: Ve
     CombatSystem.registerTower(towerData)
     
     EventBus.fire("TowerPlaced", id, towerType, position, player)
-    return true, id
+    return true, string.format("%s placed!", config.displayName)
 end
 
 function TowerManager.getTower(id: string)

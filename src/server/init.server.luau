@@ -93,6 +93,11 @@ placeTowerEvent.OnServerEvent:Connect(function(player, towerType, position)
         towerPlacementResultEvent:FireClient(player, false, "Invalid placement position")
         return
     end
+    local placementValid, placementError = TowerManager.isPlacementValid(position)
+    if not placementValid then
+        towerPlacementResultEvent:FireClient(player, false, placementError or "Invalid placement")
+        return
+    end
     local success, result = TowerManager.placeTower(player, towerType, position)
     towerPlacementResultEvent:FireClient(player, success, result)
     if success then

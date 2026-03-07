@@ -80,7 +80,7 @@ function EventBus.fire(eventName: string, ...: any)
     -- Iterate over a shallow copy to allow listeners to unregister during fire
     local listenersCopy = table.clone(listeners)
     
-    for _, callback in listenersCopy do
+    for _, callback in ipairs(listenersCopy) do
         local success, err = pcall(callback, ...)
         if not success then
             warn(string.format("EventBus: Error in listener for '%s': %s", eventName, tostring(err)))

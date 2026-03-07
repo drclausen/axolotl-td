@@ -120,12 +120,12 @@ local function createGameOverScreen()
     restartButton.MouseButton1Click:Connect(function()
         -- Try to teleport to same place (restart)
         local placeId = game.PlaceId
-        local success = pcall(function()
-            TeleportService:Teleport(placeId, player)
+        local success, err = pcall(function()
+            TeleportService:Teleport(placeId)
         end)
         
         if not success then
-            restartHintLabel.Text = "Teleport failed. Rejoin this server manually to restart."
+            restartHintLabel.Text = "Teleport failed. Rejoin manually to restart. (" .. tostring(err) .. ")"
         end
     end)
     
@@ -201,14 +201,14 @@ local function createVictoryScreen()
     playAgainButton.MouseButton1Click:Connect(function()
         -- Try to teleport to same place (restart)
         local placeId = game.PlaceId
-        local success = pcall(function()
-            TeleportService:Teleport(placeId, player)
+        local success, err = pcall(function()
+            TeleportService:Teleport(placeId)
         end)
         
         if not success then
             local subtitle = victoryFrame:FindFirstChild("Subtitle")
             if subtitle and subtitle:IsA("TextLabel") then
-                subtitle.Text = "Teleport failed. Rejoin manually to play again."
+                subtitle.Text = "Teleport failed. Rejoin manually. (" .. tostring(err) .. ")"
             end
         end
     end)
