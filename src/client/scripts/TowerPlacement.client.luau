@@ -51,6 +51,7 @@ local TowerConfig = require(ReplicatedStorage:WaitForChild("config"):WaitForChil
 -- State
 local selectedTowerType = nil
 local ghostModel = nil
+local rangeIndicator = nil
 local isPlacing = false
 local canPlace = false
 local renderConnection = nil
@@ -104,6 +105,36 @@ local function createGhostModel(towerType: string)
 end
 
 --[[
+    Create a flat range indicator disc for the selected tower type
+    @param towerType: string
+    @return Part?
+]]
+local function createRangeIndicator(towerType: string)
+    local config = TowerConfig[towerType]
+    if not config then
+        warn("Invalid tower type for range indicator:", towerType)
+        return nil
+    end
+
+    local range = config.range or 0
+    local diameter = range * 2
+
+    local indicator = Instance.new("Part")
+    indicator.Name = "RangeIndicator"
+    indicator.Anchored = true
+    indicator.CanCollide = false
+    indicator.CanQuery = false
+    indicator.CanTouch = false
+    indicator.Shape = Enum.PartType.Cylinder
+    indicator.Size = Vector3.new(0.1, diameter, diameter)
+    indicator.Transparency = 0.7
+    indicator.Material = Enum.Material.ForceField
+    indicator.Color = INVALID_COLOR
+
+    return indicator
+end
+
+--[[
     Check if a position is valid for tower placement
     @param position: Vector3
     @return boolean
@@ -152,6 +183,11 @@ local function updateGhostPosition()
         -- Update ghost color based on validity
         local color = canPlace and VALID_COLOR or INVALID_COLOR
         ghostModel.PrimaryPart.Color = color
+
+        if rangeIndicator then
+            rangeIndicator.Color = color
+            rangeIndicator.CFrame = CFrame.new(position.X, position.Y + 0.05, position.Z) * CFrame.Angles(0, 0, math.rad(90))
+        end
     end
 end
 
@@ -174,8 +210,13 @@ local function startPlacement(towerType: string)
         isPlacing = false
         return
     end
-    
+
+    rangeIndicator = createRangeIndicator(towerType)
+
     ghostModel.Parent = workspace
+    if rangeIndicator then
+        rangeIndicator.Parent = workspace
+    end
     
     -- Connect to RenderStepped for smooth ghost updates
     renderConnection = RunService.RenderStepped:Connect(updateGhostPosition)
@@ -193,6 +234,10 @@ cancelPlacement = function()
     if ghostModel then
         ghostModel:Destroy()
         ghostModel = nil
+    end
+    if rangeIndicator then
+        rangeIndicator:Destroy()
+        rangeIndicator = nil
     end
     
     -- Disconnect render connection

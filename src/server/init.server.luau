@@ -69,11 +69,11 @@ end
 print("[AxolotlTD] Initializing systems...")
 PathManager.init()
 EnemyManager.init()
+TowerManager.init()
 WaveManager.init()
 CombatSystem.init()
 EconomyManager.init()
 BaseHealth.init()
-TowerManager.init()
 
 local gameOver = false
 local totalWaves = #WaveConfig
