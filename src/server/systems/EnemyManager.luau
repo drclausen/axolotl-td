@@ -7,6 +7,28 @@ local PathManager = require(script.Parent:WaitForChild("PathManager"))
 
 local EnemyManager = {}
 
+local function loadAnimationHelper()
+    local modulesFolder = ReplicatedStorage:FindFirstChild("modules")
+    if not modulesFolder then
+        return nil
+    end
+
+    local helperModule = modulesFolder:FindFirstChild("AnimationHelper")
+    if not helperModule or not helperModule:IsA("ModuleScript") then
+        return nil
+    end
+
+    local ok, helper = pcall(require, helperModule)
+    if ok then
+        return helper
+    end
+
+    warn("[EnemyManager] Failed to load AnimationHelper:", helper)
+    return nil
+end
+
+local AnimationHelper = loadAnimationHelper()
+
 local enemies: {[string]: any} = {} -- id -> enemy data
 local nextId = 0
 
@@ -80,15 +102,22 @@ function EnemyManager.spawn(enemyType: string): string
         waypointIndex = 1,
         progress = 0,
         model = model,
+        isDying = false,
     }
     
     enemies[id] = enemyData
+
+    if AnimationHelper and AnimationHelper.startEnemyWalk then
+        AnimationHelper.startEnemyWalk(model, config.speed)
+    end
+
     return id
 end
 
 function EnemyManager.takeDamage(id: string, amount: number)
     local enemy = enemies[id]
     if not enemy then return end
+    if enemy.isDying then return end
     
     enemy.health -= amount
     
@@ -110,8 +139,16 @@ function EnemyManager.takeDamage(id: string, amount: number)
     end
     
     if enemy.health <= 0 then
+        enemy.isDying = true
         EventBus.fire("EnemyKilled", id, enemy.enemyType, enemy.reward)
-        EnemyManager._removeEnemy(id)
+
+        if AnimationHelper and AnimationHelper.playEnemyDeath and enemy.model then
+            AnimationHelper.playEnemyDeath(enemy.model, function()
+                EnemyManager._removeEnemy(id)
+            end)
+        else
+            EnemyManager._removeEnemy(id)
+        end
     end
 end
 
@@ -139,6 +176,10 @@ end
 
 function EnemyManager._update(dt: number)
     for id, enemy in pairs(enemies) do
+        if enemy.isDying then
+            continue
+        end
+
         local currentWP = PathManager.getWaypoint(enemy.waypointIndex)
         local nextWP = PathManager.getWaypoint(enemy.waypointIndex + 1)
         
@@ -180,6 +221,9 @@ end
 function EnemyManager._removeEnemy(id: string)
     local enemy = enemies[id]
     if enemy then
+        if AnimationHelper and AnimationHelper.stopEnemyWalk and enemy.model then
+            AnimationHelper.stopEnemyWalk(enemy.model)
+        end
         if enemy.model then
             enemy.model:Destroy()
         end

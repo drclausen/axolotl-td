@@ -6,6 +6,28 @@ local EventBus = require(ReplicatedStorage:WaitForChild("modules"):WaitForChild(
 local EconomyManager = require(script.Parent:WaitForChild("EconomyManager"))
 local CombatSystem = require(script.Parent:WaitForChild("CombatSystem"))
 
+local function loadAnimationHelper()
+    local modulesFolder = ReplicatedStorage:FindFirstChild("modules")
+    if not modulesFolder then
+        return nil
+    end
+
+    local helperModule = modulesFolder:FindFirstChild("AnimationHelper")
+    if not helperModule or not helperModule:IsA("ModuleScript") then
+        return nil
+    end
+
+    local ok, helper = pcall(require, helperModule)
+    if ok then
+        return helper
+    end
+
+    warn("[TowerManager] Failed to load AnimationHelper:", helper)
+    return nil
+end
+
+local AnimationHelper = loadAnimationHelper()
+
 local TowerManager = {}
 local towers: {[string]: any} = {}
 local nextId = 0
@@ -123,6 +145,10 @@ function TowerManager.placeTower(player: Player, towerType: string, position: Ve
     
     model.PrimaryPart = base
     model.Parent = workspace.Towers
+
+    if AnimationHelper and AnimationHelper.startTowerIdle then
+        AnimationHelper.startTowerIdle(model)
+    end
     
     local towerData = {
         id = id,

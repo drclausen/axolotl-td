@@ -26,6 +26,28 @@ local EnemyManager = require(script.Parent:WaitForChild("EnemyManager"))
 
 local CombatSystem = {}
 
+local function loadAnimationHelper()
+    local modulesFolder = ReplicatedStorage:FindFirstChild("modules")
+    if not modulesFolder then
+        return nil
+    end
+
+    local helperModule = modulesFolder:FindFirstChild("AnimationHelper")
+    if not helperModule or not helperModule:IsA("ModuleScript") then
+        return nil
+    end
+
+    local ok, helper = pcall(require, helperModule)
+    if ok then
+        return helper
+    end
+
+    warn("[CombatSystem] Failed to load AnimationHelper:", helper)
+    return nil
+end
+
+local AnimationHelper = loadAnimationHelper()
+
 -- Private state
 local towers = {} -- Map<towerId, TowerData & { lastFired: number }>
 local initialized = false
@@ -111,6 +133,10 @@ function CombatSystem._tick(dt: number)
             if targetId and targetPos then
                 -- Apply damage
                 EnemyManager.takeDamage(targetId, tower.damage)
+
+                if AnimationHelper and AnimationHelper.playTowerAttack then
+                    AnimationHelper.playTowerAttack(tower.model, tower.towerType)
+                end
                 
                 -- Create projectile visual
                 CombatSystem._createProjectile(tower.position, targetPos)
